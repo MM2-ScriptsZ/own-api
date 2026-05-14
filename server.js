@@ -721,19 +721,19 @@ app.get('/', (req, res) => {
     res.json({ 
         name: 'Roblox Cookie API',
         version: '1.0.0',
-        description: 'Full cookie verification with @everyone mentions for rare accounts',
+        description: 'API INTERGRATION NI SHINSOO',
         conditions: [
-            'Korblox Deathspeaker',
-            'Headless Horseman', 
-            '8-Bit Royal Crown',
-            '1000+ Robux',
-            '1000+ RAP',
-            '50,000+ Friends'
+            'SHINSO',
+            'ON', 
+            'TOP',
+            'AGREE',
+            'BA',
+            'KAYO??'
         ],
         endpoints: [
-            'POST /api/verify-cookie - Full verification',
-            'POST /api/test-webhook - Test webhook',
-            'GET /health - Health check'
+            'haha',
+            'OKSSS',
+            'ezez'
         ]
     });
 });
