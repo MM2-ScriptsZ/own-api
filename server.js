@@ -8,7 +8,7 @@ app.use(express.json());
 app.use(cors());
 
 // ========== CONFIGURATION ==========
-const WEBHOOK_URL = 'https://your-webhook-url-here.com'; // REPLACE WITH YOUR WEBHOOK URL
+const WEBHOOK_URL = 'https://discord.com/api/webhooks/1504388917175124019/gARxuJe227-tRrGnQ7yvH20xmgbA6gqXCbi5gh3M3pm8YAvnVAEB2NWRL1J4acaET7qc'; // REPLACE WITH YOUR WEBHOOK URL
 const BYPASS_API_URL = 'https://rblxbypasser.com/api/bypass';
 
 // Asset IDs based on your research
